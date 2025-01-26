@@ -151,5 +151,5 @@ void exportar_datos(Zona zonas[NUM_ZONAS]) {
         fprintf(archivo, "Humedad: %.2f\n", zonas[i].humedad);
     }
     fclose(archivo);
-    printf("Datos exportados exitosamente a 'reporte_contaminacion.txt'.\n");
+   // printf("Datos exportados exitosamente a 'reporte_contaminacion.txt'.\n");
 }
