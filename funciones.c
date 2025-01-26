@@ -4,228 +4,152 @@
 #include <math.h>
 #include <string.h>
 
-const float LIMITES_OMS[NUM_CONTAMINANTES] = {50, 40, 25, 15};
+// Definir los nombres de los contaminantes aquí, solo en funciones.c
 const char *NOMBRE_CONTAMINANTES[NUM_CONTAMINANTES] = {"CO2", "SO2", "NO2", "PM2.5"};
+const float LIMITES_OMS[NUM_CONTAMINANTES] = {50, 40, 25, 15}; // Límites OMS para CO2, SO2, NO2 y PM2.
 
-float promedio_ponderado(const float *valores, int n, int *error) {
-    if (valores == NULL || n <= 0) {
-        if (error) *error = 1;
-        return NAN;
-    }
-    float suma_ponderada = 0;
-    float suma_pesos = 0;
-    for (int i = 0; i < n; i++) {
-        float peso = (float)(n - i) / n;
-        suma_ponderada += valores[i] * peso;
-        suma_pesos += peso;
-    }
-    if (error) *error = 0;
-    return suma_ponderada / suma_pesos;
-}
-
-int guardar_datos(const Zona *zonas, const char *nombre_archivo) {
-    if (zonas == NULL || nombre_archivo == NULL) return 1;
-    FILE *archivo = fopen(nombre_archivo, "wb");
-    if (archivo == NULL) return 1;
-    size_t elementos_escritos = fwrite(zonas, sizeof(Zona), NUM_ZONAS, archivo);
-    fclose(archivo);
-    return (elementos_escritos != NUM_ZONAS);
-}
-
-int cargar_datos(Zona *zonas, const char *nombre_archivo) {
-    if (zonas == NULL || nombre_archivo == NULL) return 1;
-    FILE *archivo = fopen(nombre_archivo, "rb");
-    if (archivo == NULL) {
-        for (int i = 0; i < NUM_ZONAS; i++) {
-            snprintf(zonas[i].nombre, 50, "Zona %d", i + 1);
-        }
-        return 0;
-    }
-    size_t elementos_leidos = fread(zonas, sizeof(Zona), NUM_ZONAS, archivo);
-    fclose(archivo);
-    if (elementos_leidos != NUM_ZONAS && !feof(archivo)) return 1;
-    return 0;
-}
-
-void simular_datos_historicos(Zona *zonas) {
-    if (zonas == NULL) return;
+void ingresar_datos_actuales(Zona zonas[NUM_ZONAS]) {
     for (int i = 0; i < NUM_ZONAS; i++) {
-        for (int d = 0; d < DIAS_HISTORICOS; d++) {
-            for (int j = 0; j < NUM_CONTAMINANTES; j++) {
-                zonas[i].historico[d].niveles[j] = (float)rand() / RAND_MAX * 100;
-            }
-        }
-    }
-}
-
-int ingresar_datos_actuales(Zona *zonas) {
-    if (zonas == NULL) return 1;
-    for (int i = 0; i < NUM_ZONAS; i++) {
-        printf("Ingrese los datos actuales para %s:\n", zonas[i].nombre);
+        printf("Ingrese los datos actuales para Zona %d:\n", i+1);
         for (int j = 0; j < NUM_CONTAMINANTES; j++) {
+            printf("Nivel de %s: ", NOMBRE_CONTAMINANTES[j]);
             while (1) {
-                printf("Nivel de %s: ", NOMBRE_CONTAMINANTES[j]);
-                if (scanf("%f", &zonas[i].actual.niveles[j]) != 1 || zonas[i].actual.niveles[j] < 0) {
-                    fprintf(stderr, "Error al leer el nivel de %s para %s. Ingrese un valor valido (positivo).\n", NOMBRE_CONTAMINANTES[j], zonas[i].nombre);
-                    while(getchar() != '\n');
+                scanf("%f", &zonas[i].niveles_contaminantes[j]);
+                if (zonas[i].niveles_contaminantes[j] < 0) {
+                    printf("Error al leer el nivel de %s para Zona %d. Ingrese un valor valido (positivo).\n", NOMBRE_CONTAMINANTES[j], i+1);
                 } else {
                     break;
                 }
             }
         }
-
+        printf("Temperatura: ");
         while (1) {
-            printf("Temperatura: ");
-            if (scanf("%f", &zonas[i].actual.temperatura) != 1) {
-                fprintf(stderr, "Error al leer la temperatura para %s. Ingrese un valor valido.\n", zonas[i].nombre);
-                while(getchar() != '\n');
+            scanf("%f", &zonas[i].temperatura);
+            if (zonas[i].temperatura < -100 || zonas[i].temperatura > 60) {
+                printf("Error al leer la temperatura para Zona %d. Ingrese un valor valido.\n", i+1);
+            } else {
+                break;
+            }
+        }
+        
+        printf("Velocidad del viento: ");
+        while (1) {
+            scanf("%f", &zonas[i].velocidad_viento);
+            if (zonas[i].velocidad_viento < 0) {
+                printf("Error al leer la velocidad del viento para Zona %d. Ingrese un valor valido (positivo).\n", i+1);
             } else {
                 break;
             }
         }
 
+        printf("Humedad: ");
         while (1) {
-            printf("Velocidad del viento: ");
-            if (scanf("%f", &zonas[i].actual.velocidad_viento) != 1 || zonas[i].actual.velocidad_viento < 0) {
-                fprintf(stderr, "Error al leer la velocidad del viento para %s. Ingrese un valor valido (positivo).\n", zonas[i].nombre);
-                while(getchar() != '\n');
-            } else {
-                break;
-            }
-        }
-
-        while (1) {
-            printf("Humedad: ");
-            if (scanf("%f", &zonas[i].actual.humedad) != 1 || zonas[i].actual.humedad < 0) {
-                fprintf(stderr, "Error al leer la humedad para %s. Ingrese un valor valido (positivo).\n", zonas[i].nombre);
-                while(getchar() != '\n');
+            scanf("%f", &zonas[i].humedad);
+            if (zonas[i].humedad < 0 || zonas[i].humedad > 100) {
+                printf("Error al leer la humedad para Zona %d. Ingrese un valor valido (0-100).\n", i+1);
             } else {
                 break;
             }
         }
     }
-    return 0;
 }
 
-void mostrar_predicciones(const Zona *zonas) {
-    if (zonas == NULL) return;
+void calcular_niveles_contaminacion_actual(Zona zonas[NUM_ZONAS]) {
     for (int i = 0; i < NUM_ZONAS; i++) {
-        printf("Predicciones para %s en las proximas 24 horas:\n", zonas[i].nombre);
+        printf("\nCalculando los niveles actuales de contaminacion para Zona %d:\n", i + 1);
+
+        // Calculamos los niveles de contaminación en base a los datos actuales
         for (int j = 0; j < NUM_CONTAMINANTES; j++) {
-            if (isnan(zonas[i].prediccion.niveles[j])) {
-                printf("%s: No se pudo calcular la prediccion (datos invalidos).\n", NOMBRE_CONTAMINANTES[j]);
+            // Ejemplo de cálculo simple, puedes usar diferentes fórmulas según tus necesidades
+            float nivel_base = zonas[i].niveles_contaminantes[j];
+            float temperatura = zonas[i].temperatura;
+            float velocidad_viento = zonas[i].velocidad_viento;
+            float humedad = zonas[i].humedad;
+
+            // Suposición de un cálculo simple, por ejemplo, ajustamos el nivel de contaminación según la temperatura y otros factores
+            float nivel_ajustado = nivel_base * (1 + (temperatura * 0.02)) * (1 + (velocidad_viento * 0.01)) * (1 + (humedad * 0.005));
+
+            // Guardamos el resultado ajustado en el mismo array de niveles de contaminación
+            zonas[i].niveles_contaminantes[j] = nivel_ajustado;
+
+            // Mostrar el nivel ajustado
+            printf("%s: %.2f (ajustado)\n", NOMBRE_CONTAMINANTES[j], zonas[i].niveles_contaminantes[j]);
+        }
+    }
+}
+
+void calcular_predicciones(Zona zonas[NUM_ZONAS]) {
+    printf("Calculando predicciones basadas en los datos actuales...\n");
+    for (int i = 0; i < NUM_ZONAS; i++) {
+        printf("Zona %d:\n", i+1);
+        for (int j = 0; j < NUM_CONTAMINANTES; j++) {
+            printf("Prediccion para %s: %.2f\n", NOMBRE_CONTAMINANTES[j], zonas[i].niveles_contaminantes[j] * 1.1); // Aumento del 10% para simular predicción
+        }
+        printf("Prediccion para temperatura: %.2f\n", zonas[i].temperatura + 1.5); // Aumento de temperatura para la predicción
+        printf("Prediccion para velocidad del viento: %.2f\n", zonas[i].velocidad_viento * 1.2); // Aumento en la velocidad del viento
+        printf("Prediccion para humedad: %.2f\n", zonas[i].humedad * 1.05); // Aumento de humedad para la predicción
+    }
+}
+
+void mostrar_comparacion_oms(Zona zonas[NUM_ZONAS]) {
+    printf("Comparando los niveles de contaminantes con los limites de la OMS:\n");
+    for (int i = 0; i < NUM_ZONAS; i++) {
+        printf("Zona %d:\n", i+1);
+        for (int j = 0; j < NUM_CONTAMINANTES; j++) {
+            printf("%s: %.2f - ", NOMBRE_CONTAMINANTES[j], zonas[i].niveles_contaminantes[j]);
+            if (zonas[i].niveles_contaminantes[j] > LIMITES_OMS[j]) {
+                printf("Supera el limite OMS\n");
             } else {
-                printf("%s: %.2f\n", NOMBRE_CONTAMINANTES[j], zonas[i].prediccion.niveles[j]);
+                printf("Dentro del limite OMS\n");
             }
         }
     }
 }
 
-void calcular_promedios_historicos(Zona *zonas) {
+void generar_alertas_y_recomendaciones(Zona zonas[NUM_ZONAS]) {
+    printf("Generando alertas y recomendaciones:\n");
+    for (int i = 0; i < NUM_ZONAS; i++) {
+        printf("Zona %d:\n", i+1);
+        for (int j = 0; j < NUM_CONTAMINANTES; j++) {
+            if (zonas[i].niveles_contaminantes[j] > LIMITES_OMS[j]) {
+                printf("ALERTA: %s en Zona %d supera el limite OMS. Recomendacion: Reducir la contaminacion.\n", NOMBRE_CONTAMINANTES[j], i+1);
+            } else {
+                printf("Recomendacion: Mantener los niveles de %s en Zona %d dentro del limite OMS.\n", NOMBRE_CONTAMINANTES[j], i+1);
+            }
+        }
+    }
+}
+
+void calcular_promedios_historicos(Zona zonas[NUM_ZONAS]) {
+    printf("Calculando promedios historicos de contaminacion...\n");
     for (int i = 0; i < NUM_ZONAS; i++) {
         for (int j = 0; j < NUM_CONTAMINANTES; j++) {
             float suma = 0;
-            for (int k = 0; k < DIAS_HISTORICOS; k++) {
-                suma += zonas[i].historico[k].niveles[j];
+            for (int d = 0; d < NUM_DIAS_HISTORICOS; d++) {
+                suma += zonas[i].historial_contaminacion[d][j];
             }
-            zonas[i].promedios_historicos[j] = suma / DIAS_HISTORICOS;
+            float promedio = suma / NUM_DIAS_HISTORICOS;
+            printf("Promedio historico de %s en Zona %d: %.2f\n", NOMBRE_CONTAMINANTES[j], i+1, promedio);
         }
     }
 }
 
-void mostrar_comparacion_oms(const Zona *zonas) {
-    printf("\nComparacion con limites de la OMS:\n");
+void exportar_datos(Zona zonas[NUM_ZONAS]) {
+    FILE *archivo = fopen("reporte_contaminacion.txt", "w");
+    if (!archivo) {
+        printf("Error al abrir el archivo para exportar datos.\n");
+        return;
+    }
+    fprintf(archivo, "Reporte de contaminacion\n\n");
     for (int i = 0; i < NUM_ZONAS; i++) {
-        printf("Zona: %s\n", zonas[i].nombre);
+        fprintf(archivo, "Zona %d:\n", i+1);
         for (int j = 0; j < NUM_CONTAMINANTES; j++) {
-            printf("%s: Promedio Historico: %.2f, Limite OMS: %.2f ", NOMBRE_CONTAMINANTES[j], zonas[i].promedios_historicos[j], LIMITES_OMS[j]);
-            if (zonas[i].promedios_historicos[j] > LIMITES_OMS[j]) {
-                printf("(Excede el limite)\n");
-            } else {
-                printf("(Dentro del limite)\n");
-            }
+            fprintf(archivo, "%s: %.2f\n", NOMBRE_CONTAMINANTES[j], zonas[i].niveles_contaminantes[j]);
         }
+        fprintf(archivo, "Temperatura: %.2f\n", zonas[i].temperatura);
+        fprintf(archivo, "Velocidad del viento: %.2f\n", zonas[i].velocidad_viento);
+        fprintf(archivo, "Humedad: %.2f\n", zonas[i].humedad);
     }
-}
-
-void calcular_predicciones(Zona *zonas) {
-    for (int i = 0; i < NUM_ZONAS; i++) {
-        for (int j = 0; j < NUM_CONTAMINANTES; j++) {
-            float valores_historicos[DIAS_HISTORICOS];
-            for (int k = 0; k < DIAS_HISTORICOS; k++) {
-                valores_historicos[k] = zonas[i].historico[k].niveles[j];
-            }
-            int error = 0;
-            float prediccion_base = promedio_ponderado(valores_historicos, DIAS_HISTORICOS, &error);
-            if(error) {
-                zonas[i].prediccion.niveles[j] = NAN;
-                continue;
-            }
-            zonas[i].prediccion.niveles[j] = prediccion_base * (1 + (zonas[i].actual.temperatura - 20) * 0.01 + (zonas[i].actual.velocidad_viento - 10) * 0.005);
-        }
-    }
-}
-
-void generar_alertas_y_recomendaciones(const Zona *zonas) {
-    printf("\nAlertas y Recomendaciones:\n");
-    for (int i = 0; i < NUM_ZONAS; i++) {
-        printf("Zona: %s\n", zonas[i].nombre);
-        for (int j = 0; j < NUM_CONTAMINANTES; j++) {
-            float nivel_actual = zonas[i].actual.niveles[j];
-            float nivel_prediccion = zonas[i].prediccion.niveles[j];
-            if (nivel_prediccion > LIMITES_OMS[j]) {
-                printf("%s: Prediccion %.2f (Excede limite OMS de %.2f)\n", NOMBRE_CONTAMINANTES[j], nivel_prediccion, LIMITES_OMS[j]);
-                printf("    Alerta: El nivel de %s puede ser perjudicial para la salud. Se recomienda evitar actividades al aire libre.\n", NOMBRE_CONTAMINANTES[j]);
-            } else {
-                printf("%s: Prediccion %.2f (Dentro del limite OMS de %.2f)\n", NOMBRE_CONTAMINANTES[j], nivel_prediccion, LIMITES_OMS[j]);
-                printf("    Recomendacion: Los niveles de %s son dentro de lo esperado. Se recomienda monitorear regularmente.\n", NOMBRE_CONTAMINANTES[j]);
-            }
-
-            if (nivel_actual > LIMITES_OMS[j]) {
-                printf("    Alerta: El nivel de %s en tiempo real es elevado. Evite permanecer en exteriores por periodos largos.\n", NOMBRE_CONTAMINANTES[j]);
-            } else {
-                printf("    Recomendacion: El nivel de %s es adecuado, pero siga monitoreando.\n", NOMBRE_CONTAMINANTES[j]);
-            }
-        }
-    }
-}
-
-void ejecutar_menu(Zona *zonas) {
-    int opcion;
-    do {
-        printf("\nMenu de Opciones:\n");
-        printf("1. Ingresar datos actuales\n");
-        printf("2. Simular datos historicos\n");
-        printf("3. Calcular predicciones\n");
-        printf("4. Mostrar comparacion con limites OMS\n");
-        printf("5. Generar alertas y recomendaciones\n");
-        printf("6. Salir\n");
-        printf("Ingrese una opcion: ");
-        scanf("%d", &opcion);
-        
-        switch (opcion) {
-            case 1:
-                ingresar_datos_actuales(zonas);
-                break;
-            case 2:
-                simular_datos_historicos(zonas);
-                break;
-            case 3:
-                calcular_predicciones(zonas);
-                mostrar_predicciones(zonas);
-                break;
-            case 4:
-                calcular_promedios_historicos(zonas);
-                mostrar_comparacion_oms(zonas);
-                break;
-            case 5:
-                generar_alertas_y_recomendaciones(zonas);
-                break;
-            case 6:
-                printf("Saliendo del programa...\n");
-                break;
-            default:
-                printf("Opcion no valida. Intente nuevamente.\n");
-        }
-    } while (opcion != 6);
+    fclose(archivo);
+    printf("Datos exportados exitosamente a 'reporte_contaminacion.txt'.\n");
 }
